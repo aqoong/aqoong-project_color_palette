@@ -647,7 +647,50 @@ class Semantic extends ThemeExtension<Semantic> {
       expect(source, contains('static const Color colorByAlias'));
     });
 
-    test('a non-ASCII alias is an error that points at the code column', () {
+    test('a partly non-ASCII alias warns that part of it was dropped', () {
+      // `경고/background` yields `background` — a usable name, but the `경고`
+      // qualifier is gone, and nothing else would have said so.
+      final warnings = <String>[];
+      final source = generate(
+        'alias,value\n경고/background,#FFF4E6\n',
+        warnings: warnings,
+      );
+      expect(source, contains('static const Color background = '));
+      expect(
+        warnings.single,
+        allOf(
+          contains('row 2'),
+          contains('경고/background'),
+          contains('"background"'),
+          contains('"code"'),
+        ),
+      );
+    });
+
+    test('a code value suppresses the non-ASCII warning', () {
+      final warnings = <String>[];
+      final source = generate(
+        'alias,value,code\n'
+        '경고/background,#FFF4E6,warningSurface\n'
+        '경고/배경,#FFF4E6,warningSurfaceAlt\n',
+        warnings: warnings,
+      );
+      expect(source, contains('static const Color warningSurface = '));
+      expect(source, contains('static const Color warningSurfaceAlt = '));
+      expect(warnings, isEmpty);
+    });
+
+    test('a plain ASCII alias never warns', () {
+      final warnings = <String>[];
+      generate(
+        'alias,value\ntext/primary,#212529\nBlue Gray 50,#F8F9FA\n100,#FFFFFF\n',
+        warnings: warnings,
+      );
+      expect(warnings, isEmpty);
+    });
+
+    test('a fully non-ASCII alias is an error that points at the code column',
+        () {
       expect(
         () => generate('name,value\n브랜드/파랑,#2C6BED\n'),
         throwsA(isA<PaletteFormatException>().having(

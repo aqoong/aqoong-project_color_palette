@@ -119,8 +119,22 @@ A `code` value is taken literally — it is not re-cased — and is validated: i
 to start with a letter, contain only letters, digits and underscores, and not be
 a Dart keyword. Anything else fails the build with the row number.
 
-An alias with no `code` value that yields no usable name is also a build error,
-naming the row and pointing at this column.
+### Non-ASCII aliases
+
+Dart identifiers are ASCII only, so Hangul, CJK, emoji and full-width
+punctuation cannot survive into a name. What happens depends on what is left
+over once they are dropped:
+
+| Alias | `code` | Result |
+| --- | --- | --- |
+| `경고/배경` | `warningSurface` | `warningSurface` |
+| `경고/배경` | — | **build error** — nothing usable is left |
+| `경고/background` | — | `background`, with a **build warning**: the `경고` part is gone |
+| `경고/background` | `warningSurface` | `warningSurface`, no warning |
+
+The warning exists because that third row is the quiet one: a name does come
+out, so nothing else would have mentioned that half the alias was discarded.
+Two aliases that collapse to the same name are still a hard error.
 
 ### `byAlias`
 

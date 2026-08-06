@@ -6,7 +6,11 @@
 library project_color_palette;
 
 export 'generator/color_alias.dart'
-    show aliasToIdentifier, classNameForFileName, validateExplicitIdentifier;
+    show
+        aliasToIdentifier,
+        classNameForFileName,
+        containsNonAscii,
+        validateExplicitIdentifier;
 export 'generator/hex_color.dart' show hexToArgbLiteral;
 export 'generator/palette_exception.dart';
 export 'generator/palette_options.dart';

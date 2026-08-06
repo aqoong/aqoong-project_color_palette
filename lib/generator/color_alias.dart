@@ -12,6 +12,17 @@ final _leadingDigit = RegExp(r'^[0-9]');
 /// generated file, and a leading `$` is legal but not something anyone means.
 final _explicitIdentifier = RegExp(r'^[A-Za-z][A-Za-z0-9_$]*$');
 
+final _nonAscii = RegExp(r'[^\x00-\x7F]');
+
+/// Whether [value] holds a character that cannot appear in a Dart identifier
+/// under any transformation.
+///
+/// Hangul, CJK, emoji and full-width punctuation are all silently consumed as
+/// word separators by [splitWords], so `경고/background` yields `background` and
+/// the `경고` part is gone. That is worth telling somebody about even when a
+/// usable name did come out the other side.
+bool containsNonAscii(String value) => _nonAscii.hasMatch(value);
+
 /// Names that cannot be used for a `static const` member of a class: Dart
 /// reserved words, built-in identifiers, and the `Object` members a static
 /// member is not allowed to shadow.

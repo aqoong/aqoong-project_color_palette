@@ -74,6 +74,10 @@
   developer. Where it has a value it overrides the derived name and is taken
   literally, which is how non-ASCII aliases, name collisions and deliberate
   renames are handled. Invalid codes fail the build.
+* A build warning when an alias contains non-ASCII characters and no `code` is
+  set but a name could still be derived — `경고/background` becomes `background`,
+  and without the warning nothing would mention that the `경고` part was
+  discarded. An alias with nothing usable left remains a hard error.
 * `byAlias`, a `Map<String, Color>` keyed by the alias exactly as written in the
   CSV, for iterating a palette or looking a color up by a string.
 * Columns are matched by header name (`name`/`alias`/`token`, `value`/`hex`,

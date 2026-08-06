@@ -323,6 +323,19 @@ class PaletteSourceBuilder {
         throw PaletteFormatException('row $rowNumber: ${error.message}');
       }
 
+      // Reaching here means a name was derived, but non-ASCII characters can
+      // never be part of one, so any that were in the alias have been dropped:
+      // `경고/background` becomes `background`. A non-ASCII alias is usually a
+      // slip, and when it is deliberate the `code` column is where the intended
+      // name belongs — so say so instead of quietly losing half the alias.
+      if (code.isEmpty && containsNonAscii(alias)) {
+        onWarning?.call(
+          'row $rowNumber: the alias "$alias" contains characters that cannot '
+          'appear in a Dart name, so only part of it was used: "$identifier". '
+          'Set a "code" value to choose the name yourself.',
+        );
+      }
+
       if (reserved.contains(identifier)) {
         throw PaletteFormatException(
           'row $rowNumber: the code "$identifier" is already used by the '
