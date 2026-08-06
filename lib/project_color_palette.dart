@@ -11,4 +11,9 @@ export 'generator/hex_color.dart' show hexToArgbLiteral;
 export 'generator/palette_exception.dart';
 export 'generator/palette_options.dart';
 export 'generator/palette_source_builder.dart'
-    show PaletteSourceBuilder, aliasMapName, decodeCsvBytes;
+    show
+        AliasValueSource,
+        PaletteSourceBuilder,
+        aliasMapName,
+        decodeCsvBytes,
+        scanAliases;

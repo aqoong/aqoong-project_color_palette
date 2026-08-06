@@ -62,6 +62,57 @@ const _modeHeaders = <String, String>{
 /// Members the generated `ThemeExtension` defines itself.
 const _extensionMembers = <String>{'of', 'copyWith', 'lerp'};
 
+/// A value cell that points at another alias instead of holding a hex literal.
+final _reference = RegExp(r'^\{\s*(.+?)\s*\}$');
+
+/// One alias as some CSV declares it, before references are resolved.
+class AliasValueSource {
+  const AliasValueSource({required this.fileName, required this.valuesByMode});
+
+  /// The CSV the alias came from, used to report ambiguous references.
+  final String fileName;
+
+  /// Mode name to raw cell value. The key `''` is a single unnamed `value`
+  /// column, i.e. a palette with no modes.
+  final Map<String, String> valuesByMode;
+}
+
+/// Collects the aliases a CSV declares, so other CSVs can reference them.
+///
+/// Deliberately tolerant — a malformed sibling file must not break the file
+/// actually being built. Anything unusable is skipped rather than reported;
+/// building that file will report it properly.
+Map<String, AliasValueSource> scanAliases(
+  String csvFileName,
+  String csvContent,
+) {
+  final aliases = <String, AliasValueSource>{};
+  final rows = _parseRows(csvContent);
+  if (rows.isEmpty) return aliases;
+
+  final columns = _resolveColumns(rows.first, null);
+  for (var i = 1; i < rows.length; i++) {
+    final alias = _cell(rows[i], columns.name);
+    if (alias.isEmpty) continue;
+
+    final valuesByMode = <String, String>{};
+    for (final mode in columns.modes) {
+      final value = _cell(rows[i], mode.index);
+      if (value.isNotEmpty) valuesByMode[mode.name] = value;
+    }
+    if (valuesByMode.isEmpty) continue;
+
+    aliases.putIfAbsent(
+      alias,
+      () => AliasValueSource(
+        fileName: csvFileName,
+        valuesByMode: valuesByMode,
+      ),
+    );
+  }
+  return aliases;
+}
+
 final _whitespaceRun = RegExp(r'\s+');
 final _headerNoise = RegExp(r'[\s_\-/.]');
 
@@ -129,9 +180,59 @@ String decodeCsvBytes(List<int> bytes) {
 /// exercised by plain unit tests — the multi-color brace bug this replaces
 /// existed because nothing but a single-row example ever ran through it.
 class PaletteSourceBuilder {
-  PaletteSourceBuilder({this.options = const PaletteOptions()});
+  PaletteSourceBuilder({
+    this.options = const PaletteOptions(),
+    this.aliasIndex = const <String, List<AliasValueSource>>{},
+  });
 
   final PaletteOptions options;
+
+  /// Every alias declared by any CSV in the same folder, for resolving `{alias}`
+  /// references. A list per alias so a name declared twice can be reported as
+  /// ambiguous rather than silently picking one.
+  final Map<String, List<AliasValueSource>> aliasIndex;
+
+  /// Follows a `{alias}` value to the hex it ultimately stands for.
+  ///
+  /// [chain] carries the aliases already visited so a reference loop is a build
+  /// error instead of a stack overflow.
+  String _resolveReference(String raw, String modeName, List<String> chain) {
+    final match = _reference.firstMatch(raw);
+    if (match == null) return raw;
+
+    final target = match.group(1)!;
+    if (chain.contains(target)) {
+      throw PaletteFormatException(
+        'the reference {$target} is circular: '
+        '${[...chain, target].join(' -> ')}.',
+      );
+    }
+
+    final sources = aliasIndex[target];
+    if (sources == null || sources.isEmpty) {
+      throw PaletteFormatException(
+        'references {$target}, which no CSV in this folder declares.',
+      );
+    }
+    if (sources.length > 1) {
+      throw PaletteFormatException(
+        'the reference {$target} is ambiguous — it is declared in '
+        '${sources.map((source) => source.fileName).join(' and ')}. '
+        'Rename one of them.',
+      );
+    }
+
+    final source = sources.single;
+    // A referenced palette with no modes supplies the same value to every mode.
+    final value = source.valuesByMode[modeName] ?? source.valuesByMode[''];
+    if (value == null) {
+      throw PaletteFormatException(
+        'the reference {$target} in ${source.fileName} has no '
+        '${modeName.isEmpty ? 'plain value column, only per-mode columns' : '$modeName value'}.',
+      );
+    }
+    return _resolveReference(value, modeName, [...chain, target]);
+  }
 
   String build({
     required String csvFileName,
@@ -196,7 +297,7 @@ class PaletteSourceBuilder {
         }
         try {
           literals.add(hexToArgbLiteral(
-            values[m],
+            _resolveReference(values[m], mode.name, [alias]),
             alphaPosition: options.hexAlphaPosition,
           ));
         } on PaletteFormatException catch (error) {
@@ -268,85 +369,6 @@ class PaletteSourceBuilder {
         ..._extensionMembers,
       ],
     };
-  }
-
-  List<List<dynamic>> _parseRows(String csvContent) {
-    // The csv package defaults to a `\r\n` end of line and does not detect
-    // anything else, so an LF-only export (Google Sheets, Numbers, macOS) used
-    // to parse as a single giant row. Normalise first, then pin `eol`.
-    final normalized =
-        csvContent.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-
-    // `shouldParseNumbers: false` keeps `100` and `000000` as strings; number
-    // parsing used to turn numeric aliases into `int` and blow up on cast, and
-    // stripped the leading zeros off hex values written without a `#`.
-    return const CsvToListConverter(
-      eol: '\n',
-      shouldParseNumbers: false,
-      convertEmptyTo: '',
-    ).convert(normalized);
-  }
-
-  _Columns _resolveColumns(
-    List<dynamic> header,
-    void Function(String message)? onWarning,
-  ) {
-    final labels = header.map((cell) => _normalizeHeader(cell)).toList();
-    final used = <int>{};
-
-    int? indexOf(Set<String> candidates) {
-      for (var i = 0; i < labels.length; i++) {
-        if (used.contains(i)) continue;
-        if (candidates.contains(labels[i])) {
-          used.add(i);
-          return i;
-        }
-      }
-      return null;
-    }
-
-    final name = indexOf(_nameHeaders);
-    final code = indexOf(_codeHeaders);
-
-    // Mode columns take precedence: a CSV that names its modes is describing a
-    // themed palette, and a leftover `value` column would be ambiguous.
-    final modes = <_Mode>[];
-    final seenModes = <String>{};
-    for (var i = 0; i < labels.length; i++) {
-      if (used.contains(i)) continue;
-      final mode = _modeHeaders[labels[i]];
-      if (mode == null) continue;
-      if (!seenModes.add(mode)) {
-        throw PaletteFormatException(
-          'The header row has more than one "$mode" column.',
-        );
-      }
-      used.add(i);
-      modes.add(_Mode(name: mode, index: i));
-    }
-
-    final value = modes.isEmpty ? indexOf(_valueHeaders) : null;
-    final comment = indexOf(_commentHeaders);
-
-    if (name == null || (modes.isEmpty && value == null)) {
-      onWarning?.call(
-        'Could not find a name column and a value column in the header row '
-        '(${header.join(', ')}). Falling back to column order: 1st = name, '
-        '2nd = value, 3rd = comment.',
-      );
-      return const _Columns(
-        name: 0,
-        modes: [_Mode(name: '', index: 1)],
-        comment: 2,
-      );
-    }
-
-    return _Columns(
-      name: name,
-      modes: modes.isEmpty ? [_Mode(name: '', index: value!)] : modes,
-      code: code,
-      comment: comment,
-    );
   }
 
   String _render({
@@ -526,6 +548,84 @@ class PaletteSourceBuilder {
       ..writeln('  }')
       ..writeln('}');
   }
+}
+
+List<List<dynamic>> _parseRows(String csvContent) {
+  // The csv package defaults to a `\r\n` end of line and does not detect
+  // anything else, so an LF-only export (Google Sheets, Numbers, macOS) used
+  // to parse as a single giant row. Normalise first, then pin `eol`.
+  final normalized = csvContent.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+
+  // `shouldParseNumbers: false` keeps `100` and `000000` as strings; number
+  // parsing used to turn numeric aliases into `int` and blow up on cast, and
+  // stripped the leading zeros off hex values written without a `#`.
+  return const CsvToListConverter(
+    eol: '\n',
+    shouldParseNumbers: false,
+    convertEmptyTo: '',
+  ).convert(normalized);
+}
+
+_Columns _resolveColumns(
+  List<dynamic> header,
+  void Function(String message)? onWarning,
+) {
+  final labels = header.map((cell) => _normalizeHeader(cell)).toList();
+  final used = <int>{};
+
+  int? indexOf(Set<String> candidates) {
+    for (var i = 0; i < labels.length; i++) {
+      if (used.contains(i)) continue;
+      if (candidates.contains(labels[i])) {
+        used.add(i);
+        return i;
+      }
+    }
+    return null;
+  }
+
+  final name = indexOf(_nameHeaders);
+  final code = indexOf(_codeHeaders);
+
+  // Mode columns take precedence: a CSV that names its modes is describing a
+  // themed palette, and a leftover `value` column would be ambiguous.
+  final modes = <_Mode>[];
+  final seenModes = <String>{};
+  for (var i = 0; i < labels.length; i++) {
+    if (used.contains(i)) continue;
+    final mode = _modeHeaders[labels[i]];
+    if (mode == null) continue;
+    if (!seenModes.add(mode)) {
+      throw PaletteFormatException(
+        'The header row has more than one "$mode" column.',
+      );
+    }
+    used.add(i);
+    modes.add(_Mode(name: mode, index: i));
+  }
+
+  final value = modes.isEmpty ? indexOf(_valueHeaders) : null;
+  final comment = indexOf(_commentHeaders);
+
+  if (name == null || (modes.isEmpty && value == null)) {
+    onWarning?.call(
+      'Could not find a name column and a value column in the header row '
+      '(${header.join(', ')}). Falling back to column order: 1st = name, '
+      '2nd = value, 3rd = comment.',
+    );
+    return const _Columns(
+      name: 0,
+      modes: [_Mode(name: '', index: 1)],
+      comment: 2,
+    );
+  }
+
+  return _Columns(
+    name: name,
+    modes: modes.isEmpty ? [_Mode(name: '', index: value!)] : modes,
+    code: code,
+    comment: comment,
+  );
 }
 
 String _modeClassName(String baseName, _Mode mode) =>

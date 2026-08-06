@@ -174,6 +174,42 @@ A row that is missing one of its mode values is a build error naming the row and
 the mode; nothing silently falls back to the other mode. With only one mode
 column present, just that one class is generated and no extension.
 
+## Referencing another alias
+
+A value of `{some-alias}` means "whatever that alias is", so a semantic palette
+can be built on top of a primitive one instead of repeating hex codes:
+
+```csv
+# color_primitive.csv
+name,value
+gray-900,#212529
+blue-500,#2C6BED
+```
+
+```csv
+# semantic.csv
+alias,light,dark
+text/primary,{gray-900},{gray-100}
+action/primary,{blue-500},{blue-400}
+border/default,#DEE2E6,#343A40
+```
+
+Change `blue-500` once and every palette that references it is regenerated —
+the referenced files are read through the build system, so build_runner knows
+about the dependency.
+
+* Any CSV in the same folder can be referenced; there is no ordering or import
+  to declare, and a file can reference its own rows.
+* References chain: `{a}` may point at an alias whose value is `{b}`. A loop is
+  a build error that prints the cycle.
+* An alias declared in two different CSVs is an ambiguous reference and fails
+  the build naming both files.
+* References resolve per mode. A referenced palette with a single `value` column
+  supplies the same color to every mode; referencing a light/dark alias from a
+  single-`value` palette is an error, since there would be no way to choose.
+* Only a whole cell counts as a reference. `#FF{0}000` is just an invalid color.
+* Literals and references mix freely in the same column.
+
 ## Options
 
 Configure in your app's `build.yaml`:
@@ -204,10 +240,9 @@ You can also narrow which files are read:
 
 ## Not supported yet
 
-* Alias → primitive references (`text/brand = {blue-500}`). Every value has to
-  be a literal hex, so the CSV is flat: when a primitive changes, every row that
-  uses it has to be edited.
 * More than two modes (high contrast, brand themes).
+* `ColorScheme` output. The generated `ThemeExtension` covers custom colors;
+  mapping aliases onto Material's own `ColorScheme` slots is still manual.
 
 ## Migrating to 2.0.0
 

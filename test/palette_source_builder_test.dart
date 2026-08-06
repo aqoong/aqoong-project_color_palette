@@ -311,6 +311,198 @@ class Semantic extends ThemeExtension<Semantic> {
     });
   });
 
+  group('alias references', () {
+    /// The folder index the build step assembles from every sibling CSV.
+    Map<String, List<AliasValueSource>> indexOf(Map<String, String> files) {
+      final index = <String, List<AliasValueSource>>{};
+      files.forEach((fileName, content) {
+        scanAliases(fileName, content).forEach((alias, source) {
+          index.putIfAbsent(alias, () => <AliasValueSource>[]).add(source);
+        });
+      });
+      return index;
+    }
+
+    String generateWith(
+      String csv, {
+      required Map<String, String> siblings,
+      String fileName = 'semantic.csv',
+    }) {
+      return PaletteSourceBuilder(
+        aliasIndex: indexOf({fileName: csv, ...siblings}),
+      ).build(csvFileName: fileName, csvContent: csv);
+    }
+
+    const primitives = 'name,value\n'
+        'gray-900,#212529\n'
+        'gray-100,#F1F3F5\n'
+        'blue-500,#2C6BED\n';
+
+    test('a reference resolves to the hex of the alias it names', () {
+      final source = generateWith(
+        'alias,value\ntext/primary,{gray-900}\n',
+        siblings: const {'color_primitive.csv': primitives},
+      );
+      expect(
+          source,
+          contains('static const Color textPrimary = '
+              'Color(0xFF212529);'));
+    });
+
+    test('references work per mode', () {
+      final source = generateWith(
+        'alias,light,dark\ntext/primary,{gray-900},{gray-100}\n',
+        siblings: const {'color_primitive.csv': primitives},
+      );
+      expect(source, contains('class SemanticLight'));
+      expect(source, contains('Color(0xFF212529)'));
+      expect(source, contains('Color(0xFFF1F3F5)'));
+    });
+
+    test('a mode reference to a palette with no modes uses its one value', () {
+      final source = generateWith(
+        'alias,light,dark\naction/primary,{blue-500},{blue-500}\n',
+        siblings: const {'color_primitive.csv': primitives},
+      );
+      expect(source.split('Color(0xFF2C6BED)').length - 1, greaterThan(1));
+    });
+
+    test('references and literals mix freely', () {
+      final source = generateWith(
+        'alias,value\ntext/primary,{gray-900}\nborder,#DEE2E6\n',
+        siblings: const {'color_primitive.csv': primitives},
+      );
+      expect(source, contains('Color(0xFF212529)'));
+      expect(source, contains('Color(0xFFDEE2E6)'));
+    });
+
+    test('a reference within the same file resolves', () {
+      final source = generateWith(
+        'alias,value\nblue-500,#2C6BED\naction/primary,{blue-500}\n',
+        siblings: const {},
+      );
+      expect(
+          source,
+          contains('static const Color actionPrimary = '
+              'Color(0xFF2C6BED);'));
+    });
+
+    test('a chain of references resolves', () {
+      final source = generateWith(
+        'alias,value\ntext/brand,{action/primary}\n',
+        siblings: const {
+          'color_primitive.csv': primitives,
+          'semantic_base.csv': 'name,value\naction/primary,{blue-500}\n',
+        },
+      );
+      expect(source, contains('Color(0xFF2C6BED)'));
+    });
+
+    test('an unknown reference is an error naming the row', () {
+      expect(
+        () => generateWith(
+          'alias,value\ntext/primary,{nope}\n',
+          siblings: const {'color_primitive.csv': primitives},
+        ),
+        throwsA(isA<PaletteFormatException>().having(
+          (e) => e.message,
+          'message',
+          allOf(contains('row 2'), contains('{nope}')),
+        )),
+      );
+    });
+
+    test('an alias declared in two files is an ambiguous reference', () {
+      expect(
+        () => generateWith(
+          'alias,value\ntext/primary,{blue-500}\n',
+          siblings: const {
+            'color_primitive.csv': primitives,
+            'other.csv': 'name,value\nblue-500,#000000\n',
+          },
+        ),
+        throwsA(isA<PaletteFormatException>().having(
+          (e) => e.message,
+          'message',
+          allOf(
+            contains('ambiguous'),
+            contains('color_primitive.csv'),
+            contains('other.csv'),
+          ),
+        )),
+      );
+    });
+
+    test('a reference loop is an error rather than a stack overflow', () {
+      expect(
+        () => generateWith(
+          'alias,value\na,{b}\nb,{a}\n',
+          siblings: const {},
+        ),
+        throwsA(isA<PaletteFormatException>()
+            .having((e) => e.message, 'message', contains('circular'))),
+      );
+    });
+
+    test('an alias referencing itself is an error', () {
+      expect(
+        () => generateWith('alias,value\na,{a}\n', siblings: const {}),
+        throwsA(isA<PaletteFormatException>()
+            .having((e) => e.message, 'message', contains('circular'))),
+      );
+    });
+
+    test('a single-value palette cannot reference a mode-only alias', () {
+      expect(
+        () => generateWith(
+          'alias,value\ntext/primary,{brand}\n',
+          siblings: const {
+            'other.csv': 'name,light,dark\nbrand,#2C6BED,#4C8DFF\n',
+          },
+        ),
+        throwsA(isA<PaletteFormatException>().having(
+          (e) => e.message,
+          'message',
+          contains('no plain value column'),
+        )),
+      );
+    });
+
+    test('braces are only a reference when they are the whole cell', () {
+      expect(
+        () => generateWith(
+          'alias,value\ntext/primary,#FF{0}000\n',
+          siblings: const {},
+        ),
+        throwsA(isA<PaletteFormatException>()
+            .having((e) => e.message, 'message', contains('Invalid color'))),
+      );
+    });
+  });
+
+  group('scanAliases', () {
+    test('collects aliases with their raw per-mode values', () {
+      final aliases = scanAliases(
+        'semantic.csv',
+        'alias,light,dark\ntext/primary,#212529,{gray-100}\n',
+      );
+      expect(aliases.keys, ['text/primary']);
+      expect(aliases['text/primary']!.fileName, 'semantic.csv');
+      expect(aliases['text/primary']!.valuesByMode,
+          {'light': '#212529', 'dark': '{gray-100}'});
+    });
+
+    test('a malformed sibling contributes nothing instead of throwing', () {
+      expect(scanAliases('broken.csv', ''), isEmpty);
+      expect(scanAliases('broken.csv', 'name,value\n,,\n'), isEmpty);
+      // A bad hex is not this function's problem — building that file reports it.
+      expect(
+        scanAliases('broken.csv', 'name,value\nx,not-a-color\n').keys,
+        ['x'],
+      );
+    });
+  });
+
   group('line endings', () {
     const expectedNames = ['white', 'black'];
 

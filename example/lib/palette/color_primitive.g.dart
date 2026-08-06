@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 
 /// Color palette generated from `color_primitive.csv`.
 ///
-/// Contains 9 colors.
+/// Contains 11 colors.
 class ColorPrimitive {
   const ColorPrimitive._();
 
@@ -24,8 +24,14 @@ class ColorPrimitive {
   /// `gray-500`
   static const Color gray500 = Color(0xFFADB5BD);
 
+  /// `gray-600`
+  static const Color gray600 = Color(0xFF868E96);
+
   /// `gray-900`
   static const Color gray900 = Color(0xFF212529);
+
+  /// `blue-400`
+  static const Color blue400 = Color(0xFF4C8DFF);
 
   /// `blue-500` - Brand blue
   static const Color blue500 = Color(0xFF2C6BED);
@@ -46,7 +52,9 @@ class ColorPrimitive {
     'gray-50': gray50,
     'gray-100': gray100,
     'gray-500': gray500,
+    'gray-600': gray600,
     'gray-900': gray900,
+    'blue-400': blue400,
     'blue-500': blue500,
     'blue-600': blue600,
     'red-500': red500,

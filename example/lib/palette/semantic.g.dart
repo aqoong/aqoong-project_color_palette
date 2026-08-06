@@ -12,7 +12,7 @@ import 'package:flutter/material.dart';
 class SemanticLight {
   const SemanticLight._();
 
-  /// `text/primary` - Default body text
+  /// `text/primary` - References the primitive palette
   static const Color textPrimary = Color(0xFF212529);
 
   /// `text/secondary`
@@ -21,7 +21,7 @@ class SemanticLight {
   /// `text/on-brand`
   static const Color textOnBrand = Color(0xFFFFFFFF);
 
-  /// `Background Default` - Spaces in the alias work too
+  /// `Background Default` - A literal is still fine
   static const Color backgroundDefault = Color(0xFFFFFFFF);
 
   /// `background/subtle`
@@ -76,7 +76,7 @@ class SemanticLight {
 class SemanticDark {
   const SemanticDark._();
 
-  /// `text/primary` - Default body text
+  /// `text/primary` - References the primitive palette
   static const Color textPrimary = Color(0xFFF1F3F5);
 
   /// `text/secondary`
@@ -85,7 +85,7 @@ class SemanticDark {
   /// `text/on-brand`
   static const Color textOnBrand = Color(0xFFFFFFFF);
 
-  /// `Background Default` - Spaces in the alias work too
+  /// `Background Default` - A literal is still fine
   static const Color backgroundDefault = Color(0xFF16191D);
 
   /// `background/subtle`
@@ -194,7 +194,7 @@ class Semantic extends ThemeExtension<Semantic> {
     warningSurface: SemanticDark.warningSurface,
   );
 
-  /// `text/primary` - Default body text
+  /// `text/primary` - References the primitive palette
   final Color textPrimary;
 
   /// `text/secondary`
@@ -203,7 +203,7 @@ class Semantic extends ThemeExtension<Semantic> {
   /// `text/on-brand`
   final Color textOnBrand;
 
-  /// `Background Default` - Spaces in the alias work too
+  /// `Background Default` - A literal is still fine
   final Color backgroundDefault;
 
   /// `background/subtle`

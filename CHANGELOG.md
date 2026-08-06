@@ -55,6 +55,14 @@
 * A malformed CSV fails the build (`log.severe`) instead of logging a warning.
 
 ### Added
+* **Alias references.** A value of `{some-alias}` resolves to whatever that
+  alias is, so a semantic palette can sit on top of a primitive one instead of
+  repeating hex codes. Any CSV in the same folder can be referenced with no
+  ordering or import to declare, references chain, and the referenced files are
+  read through the build system so editing a primitive regenerates every palette
+  that uses it. Reference loops, unknown aliases, and an alias declared in two
+  files all fail the build with the row number. Siblings are only read when the
+  CSV actually contains a `{`, so a palette with no references costs nothing.
 * **Light and dark modes.** A CSV can carry one value per mode
   (`alias,light,dark`) instead of a single `value` column. `semantic.csv` then
   generates `SemanticLight` and `SemanticDark` — still plain `static const`, so
@@ -80,7 +88,8 @@
 
 ### Internal
 * Reads through `buildStep` instead of `dart:io`, and no longer globs every
-  asset once per input. `glob` is no longer a dependency.
+  asset once per input just to throw the result away. The folder is only globbed
+  when a CSV actually uses `{alias}` references.
 * Generated source is run through `dart_style`, so the output is canonical
   regardless of how long the color names are and `dart format` in the consuming
   project leaves it alone. The formatter also has to parse the source, so a
