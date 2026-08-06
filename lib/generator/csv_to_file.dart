@@ -2,93 +2,84 @@
  * Copyright (c) 2024. AQoong(cooldnjsdn@gmail.com) All rights reserved.
  */
 
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:build/build.dart';
-import 'package:csv/csv.dart';
+import 'package:glob/glob.dart';
 
+import 'palette_options.dart';
+import 'palette_source_builder.dart';
+
+/// Reads one CSV asset through the build system and writes the palette it
+/// describes.
 class CsvToFile {
-  final String outputFilePath = 'lib/palette/';
-  late final File csvFile;
+  CsvToFile({
+    required this.buildStep,
+    required this.csvAssetId,
+    this.options = const PaletteOptions(),
+  });
+
   final BuildStep buildStep;
   final AssetId csvAssetId;
+  final PaletteOptions options;
 
-  CsvToFile({required this.buildStep, required this.csvAssetId}) {
-    csvFile = File(csvAssetId.path);
+  Future<void> write({void Function(String message)? onWarning}) async {
+    // Read through `buildStep`, not `dart:io`. `File(assetId.path)` only ever
+    // resolved because the CSV happened to live in the root package and the
+    // build ran from that directory.
+    final bytes = await buildStep.readAsBytes(csvAssetId);
+    final csvContent = decodeCsvBytes(bytes);
+    final csvFileName = csvAssetId.pathSegments.last;
+
+    final source = PaletteSourceBuilder(
+      options: options,
+      aliasIndex: await _aliasIndex(csvFileName, csvContent),
+    ).build(
+      csvFileName: csvFileName,
+      csvContent: csvContent,
+      onWarning: onWarning,
+    );
+
+    // build_runner derives this from `buildExtensions`, so the output always
+    // satisfies the declared contract — including file names containing dots,
+    // which `split('.').first` used to mangle into an unexpected output.
+    await buildStep.writeAsString(buildStep.allowedOutputs.single, source);
   }
 
-  /// read CSV File
-  /// UTF-8 encoded CSV file
-  Future<void> csvContent() async {
-    if (!await csvFile.exists()) {
-      throw Exception('CSV File not found : ${csvFile.path}');
+  /// Aliases declared by every CSV next to this one, for `{alias}` references.
+  ///
+  /// Skipped entirely unless this CSV actually contains a `{`, so a palette that
+  /// uses no references never pays for reading its siblings. Reading them
+  /// through `buildStep` also registers them as inputs, so editing a primitive
+  /// rebuilds the palettes that reference it.
+  Future<Map<String, List<AliasValueSource>>> _aliasIndex(
+    String csvFileName,
+    String csvContent,
+  ) async {
+    if (!csvContent.contains('{')) {
+      return const <String, List<AliasValueSource>>{};
     }
 
-    final strCsv = await csvFile.readAsString(encoding: utf8);
-    final csvFileName = csvFile.path.split('/').last;
-    try {
-      final List<dynamic> rows = const CsvToListConverter().convert(strCsv);
-      final buffer = StringBuffer(_importSection(csvFileName, rows.length - 1));
-
-      for (var i = 1; i < rows.length; i++) {
-        final data = rows[i];
-        final String colorName = data[0] ?? '';
-        final String colorValue = (data[1] ?? '').replaceFirst('#', '0xFF');
-        final String comment = data[2] ?? '';
-
-        String objectString = '';
-        if (colorName.isNotEmpty && colorValue.isNotEmpty) {
-          objectString =
-              '  static const Color ${_colorNameConverter(colorName)} = Color($colorValue);';
-          if (comment.isNotEmpty) {
-            objectString = '$objectString  //$comment';
-          }
-        } else {
-          objectString = '  // Error : $colorName, $colorValue';
-        }
-        buffer.writeln(objectString);
-        buffer.writeln('}');
-      }
-
-      //file create
-      final outputId = AssetId(buildStep.inputId.package,
-          '$outputFilePath${csvFileName.split('.').first}.g.dart');
-      await buildStep.writeAsString(outputId, buffer.toString());
-    } catch (e) {
-      rethrow;
+    final index = <String, List<AliasValueSource>>{};
+    void add(Map<String, AliasValueSource> aliases) {
+      aliases.forEach((alias, aliasSource) {
+        index.putIfAbsent(alias, () => <AliasValueSource>[]).add(aliasSource);
+      });
     }
-  }
 
-  StringBuffer _importSection(String fileName, int rowLength) {
-    StringBuffer sb = StringBuffer();
-    sb.writeln('import \'package:flutter/material.dart\';');
-    sb.writeln('');
-    sb.writeln('/// Auto-generated from project_color_palette package.');
-    sb.writeln("/// From '$fileName'");
-    sb.writeln('/// color row length $rowLength');
-    sb.writeln('class ${_toCamelCase(fileName)} {');
-    return sb;
-  }
+    // This file first, and without re-reading it.
+    add(scanAliases(csvFileName, csvContent));
 
-  String _colorNameConverter(String colorName) {
-    final lowCase = colorName.toLowerCase();
-    String result = lowCase;
+    final path = csvAssetId.path;
+    final separator = path.lastIndexOf('/');
+    final folder = separator == -1 ? '' : path.substring(0, separator + 1);
 
-    if (lowCase.isNotEmpty) {
-      result = lowCase[0].toUpperCase() + lowCase.substring(1);
+    final siblings = await buildStep.findAssets(Glob('$folder*.csv')).toList();
+    for (final sibling in siblings) {
+      if (sibling == csvAssetId) continue;
+      add(scanAliases(
+        sibling.pathSegments.last,
+        decodeCsvBytes(await buildStep.readAsBytes(sibling)),
+      ));
     }
-    return 'color$result';
-  }
-
-  String _toCamelCase(String fileName) {
-    // 파일명에서 확장자를 제거
-    String nameWithoutExtension = fileName.split('.').first;
-
-    // 언더스코어(_)로 단어를 분리한 후 각 단어의 첫 글자를 대문자로 변환
-    return nameWithoutExtension
-        .split('_') // 언더스코어로 분리
-        .map((word) => word[0].toUpperCase() + word.substring(1)) // 첫 글자를 대문자로
-        .join(''); // 다시 합침
+    return index;
   }
 }

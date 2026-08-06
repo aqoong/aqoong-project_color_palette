@@ -1,0 +1,14 @@
+alias,light,dark,code,description
+text/primary,{gray-900},{gray-100},,References the primitive palette
+text/secondary,{gray-600},{gray-500},,
+text/on-brand,{gray-0},{gray-0},,
+Background Default,#FFFFFF,#16191D,,A literal is still fine
+background/subtle,{gray-50},{gray-900},,
+border/default,#DEE2E6,#343A40,,
+action/primary,{blue-500},{blue-400},,
+action/primary-pressed,{blue-600},{blue-500},,
+overlay/scrim,#00000080,#000000B3,,50% black overlay
+brandAccentSubtle,#E7F0FF,#16233D,,camelCase is not re-cased
+100,#F1F3F5,#212529,,A numeric alias needs a color prefix
+new,#E03131,#FF6B6B,,A Dart keyword needs a color prefix
+경고/배경,#FFF4E6,#3D2E16,warningSurface,Non-ASCII alias needs an agreed code

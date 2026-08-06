@@ -1,23 +1,31 @@
 name: project_color_palette
 description: "This package is a tool for collaboration between designers and Flutter developers. csv to color_palette"
-version: 1.0.2
+version: 2.0.0
 homepage: https://github.com/aqoong/project_color_palette
+repository: https://github.com/aqoong/project_color_palette
+issue_tracker: https://github.com/aqoong/project_color_palette/issues
+topics:
+  - codegen
+  - build-runner
+  - design-system
+  - color
+  - csv
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  # 3.4.0 is the floor dart_style 3 requires.
+  sdk: '>=3.4.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
   csv: ^6.0.0
   build: ^2.4.1
+  dart_style: ^3.0.0
   glob: ^2.1.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^2.0.0
-  source_gen_test: ^1.0.6
+  flutter_lints: ^4.0.0
   build_runner: ^2.4.9
 
-license: MIT

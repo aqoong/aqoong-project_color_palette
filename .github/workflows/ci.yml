@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          # Matches the SDK used for local development.
+          flutter-version: 3.44.7
+          channel: stable
+          cache: true
+
+      # Resolves the example package as well.
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed lib test example/lib example/test
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      # The generator is only really exercised end to end by running it, and the
+      # generated palettes are committed, so both are checked here.
+      - name: Regenerate the example palettes
+        working-directory: example
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Fail if the committed palettes are stale
+        run: git diff --exit-code -- example/lib/palette
+
+      - name: Test the example
+        working-directory: example
+        run: flutter test
