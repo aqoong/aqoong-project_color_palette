@@ -1,51 +1,95 @@
 import 'package:flutter/material.dart';
 
 import 'palette/color_primitive.g.dart';
-import 'palette/semantic_light.g.dart';
+import 'palette/semantic.g.dart';
 
 void main() {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  ThemeMode _mode = ThemeMode.light;
+
+  void _toggleMode() {
+    setState(() {
+      _mode = _mode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'project_color_palette',
-      theme: ThemeData(
-        useMaterial3: true,
-        scaffoldBackgroundColor: SemanticLight.backgroundDefault,
-        // `action/primary` in the CSV becomes `actionPrimary` here.
-        colorScheme:
-            ColorScheme.fromSeed(seedColor: SemanticLight.actionPrimary),
+      themeMode: _mode,
+      // `Semantic` is the generated ThemeExtension; `Semantic.light` and
+      // `Semantic.dark` are built from the light and dark columns of the CSV.
+      theme: _themeFor(Brightness.light, Semantic.light),
+      darkTheme: _themeFor(Brightness.dark, Semantic.dark),
+      home: PaletteScreen(onToggleMode: _toggleMode),
+    );
+  }
+
+  ThemeData _themeFor(Brightness brightness, Semantic palette) {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: brightness,
+      scaffoldBackgroundColor: palette.backgroundDefault,
+      colorScheme: ColorScheme.fromSeed(
+        // A mode-independent color is still a plain `static const`, so it works
+        // in a const context and needs no BuildContext.
+        seedColor: ColorPrimitive.blue500,
+        brightness: brightness,
       ),
-      home: const PaletteScreen(),
+      extensions: [palette],
     );
   }
 }
 
 class PaletteScreen extends StatelessWidget {
-  const PaletteScreen({super.key});
+  const PaletteScreen({super.key, required this.onToggleMode});
+
+  final VoidCallback onToggleMode;
 
   @override
   Widget build(BuildContext context) {
+    // Mode-aware colors come from the extension.
+    final palette = Semantic.of(context);
+
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: SemanticLight.actionPrimary,
-        foregroundColor: SemanticLight.textOnBrand,
+        backgroundColor: palette.actionPrimary,
+        foregroundColor: palette.textOnBrand,
         title: const Text('Generated palettes'),
+        actions: [
+          IconButton(
+            onPressed: onToggleMode,
+            icon: Icon(
+              Theme.of(context).brightness == Brightness.light
+                  ? Icons.dark_mode
+                  : Icons.light_mode,
+            ),
+            tooltip: 'Toggle light / dark',
+          ),
+        ],
       ),
       body: ListView(
-        children: const [
+        children: [
           // Iterating `byAlias` keeps the designer's original alias strings,
           // including the ones that are not valid Dart identifiers.
           _PaletteSection(
-            title: 'semantic_light.csv',
-            colors: SemanticLight.byAlias,
+            title: 'semantic.csv (active mode)',
+            colors: Theme.of(context).brightness == Brightness.light
+                ? SemanticLight.byAlias
+                : SemanticDark.byAlias,
           ),
-          _PaletteSection(
+          const _PaletteSection(
             title: 'color_primitive.csv',
             colors: ColorPrimitive.byAlias,
           ),
@@ -63,16 +107,18 @@ class _PaletteSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Semantic.of(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          color: SemanticLight.backgroundSubtle,
+          color: palette.backgroundSubtle,
           child: Text(
             title,
-            style: const TextStyle(
-              color: SemanticLight.textSecondary,
+            style: TextStyle(
+              color: palette.textSecondary,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -92,9 +138,11 @@ class _Swatch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Semantic.of(context);
+
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: SemanticLight.borderDefault)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: palette.borderDefault)),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -106,14 +154,14 @@ class _Swatch extends StatelessWidget {
               decoration: BoxDecoration(
                 color: color,
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: SemanticLight.borderDefault),
+                border: Border.all(color: palette.borderDefault),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 alias,
-                style: const TextStyle(color: SemanticLight.textPrimary),
+                style: TextStyle(color: palette.textPrimary),
               ),
             ),
           ],

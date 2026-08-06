@@ -36,8 +36,13 @@ The first row is a header. Columns are matched **by name**, in any order:
 | --- | --- |
 | alias  | `name`, `alias`, `token`, `key`, `color name` |
 | value  | `value`, `hex`, `hex code`, `color`, `colour` |
+| light mode value | `light`, `light mode`, `day` |
+| dark mode value | `dark`, `dark mode`, `night` |
 | code (optional) | `code`, `code name`, `dart`, `dart name`, `identifier`, `member` |
 | comment | `comment`, `description`, `desc`, `memo`, `note`, `remark` |
+
+Use either a single `value` column or a pair of mode columns — see
+[Light and dark](#light-and-dark).
 
 If no name/value pair is recognised the generator falls back to column order
 (1st = name, 2nd = value, 3rd = comment) and logs a warning.
@@ -130,6 +135,45 @@ final gray = SemanticLight.byAlias['100'];
 Useful for iterating a whole palette — a debug swatch screen, for example — and
 for reaching a color by a string you already have.
 
+## Light and dark
+
+Give a row one value per mode instead of a single `value`, and the modes stay
+side by side in the sheet — which is how a designer looks at them:
+
+```csv
+alias,light,dark,description
+text/primary,#212529,#F1F3F5,Default body text
+action/primary,#2C6BED,#4C8DFF,
+```
+
+`semantic.csv` then generates **three** classes:
+
+```dart
+SemanticLight.textPrimary   // static const, usable in a const context
+SemanticDark.textPrimary    // static const
+Semantic                    // ThemeExtension<Semantic>
+```
+
+The per-mode classes are ordinary `static const` holders, so a color that does
+not depend on the theme costs nothing and needs no `BuildContext`. `Semantic` is
+the opt-in layer for the ones that do:
+
+```dart
+MaterialApp(
+  theme: ThemeData(extensions: const [Semantic.light]),
+  darkTheme: ThemeData(extensions: const [Semantic.dark]),
+);
+
+// anywhere below the Theme
+Text('Hi', style: TextStyle(color: Semantic.of(context).textPrimary));
+```
+
+`copyWith` and `lerp` are generated too, so the palette animates with the theme.
+
+A row that is missing one of its mode values is a build error naming the row and
+the mode; nothing silently falls back to the other mode. With only one mode
+column present, just that one class is generated and no extension.
+
 ## Options
 
 Configure in your app's `build.yaml`:
@@ -160,11 +204,10 @@ You can also narrow which files are read:
 
 ## Not supported yet
 
-* Alias → primitive references (`text.brand = blue-500`). Every `value` must be
-  a literal hex, so the CSV has to be flat.
-* Light / dark modes. Each CSV generates an independent class of
-  `static const Color`; there is no `ThemeExtension` or `ColorScheme` output, so
-  runtime mode switching is up to you.
+* Alias → primitive references (`text/brand = {blue-500}`). Every value has to
+  be a literal hex, so the CSV is flat: when a primitive changes, every row that
+  uses it has to be edited.
+* More than two modes (high contrast, brand themes).
 
 ## Migrating to 2.0.0
 

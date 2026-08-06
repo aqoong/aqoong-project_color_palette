@@ -1,0 +1,5 @@
+# The example CSV fixtures are test input, so their bytes have to survive
+# checkout untouched. `semantic.csv` is deliberately CRLF, the way Excel on
+# Windows writes it; git's autocrlf would otherwise normalise it to LF and the
+# build would never be exercised against a real-world export.
+example/assets/color_palette/*.csv -text

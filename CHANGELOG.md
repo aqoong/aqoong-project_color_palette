@@ -55,6 +55,13 @@
 * A malformed CSV fails the build (`log.severe`) instead of logging a warning.
 
 ### Added
+* **Light and dark modes.** A CSV can carry one value per mode
+  (`alias,light,dark`) instead of a single `value` column. `semantic.csv` then
+  generates `SemanticLight` and `SemanticDark` — still plain `static const`, so
+  const contexts and theme-independent colors are unaffected — plus a
+  `Semantic extends ThemeExtension<Semantic>` with `light`/`dark` constants,
+  `of(context)`, `copyWith` and `lerp`. A row missing one of its mode values is
+  a build error naming the row and the mode.
 * An optional `code` column holding a member name agreed between designer and
   developer. Where it has a value it overrides the derived name and is taken
   literally, which is how non-ASCII aliases, name collisions and deliberate
@@ -74,3 +81,9 @@
 ### Internal
 * Reads through `buildStep` instead of `dart:io`, and no longer globs every
   asset once per input. `glob` is no longer a dependency.
+* Generated source is run through `dart_style`, so the output is canonical
+  regardless of how long the color names are and `dart format` in the consuming
+  project leaves it alone. The formatter also has to parse the source, so a
+  generator that emits broken Dart now fails at build time rather than in
+  somebody else's compile step.
+* The declared SDK floor moves to 3.4.0, which is what `dart_style` 3 requires.
