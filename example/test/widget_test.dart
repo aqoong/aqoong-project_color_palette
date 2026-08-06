@@ -1,30 +1,29 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
+import 'package:example/main.dart';
+import 'package:example/palette/color_primitive.g.dart';
+import 'package:example/palette/semantic_light.g.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:example/main.dart';
-
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
+  testWidgets('every generated alias is rendered', (tester) async {
     await tester.pumpWidget(const MyApp());
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    // Aliases that are valid Dart identifiers are reachable directly...
+    expect(SemanticLight.textPrimary, const Color(0xFF212529));
+    expect(SemanticLight.overlayScrim, const Color(0x80000000));
+    expect(ColorPrimitive.transparent, const Color(0x00FFFFFF));
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    // An alias with no possible Dart name gets one from the CSV's code column.
+    expect(SemanticLight.warningSurface, const Color(0xFFFFF4E6));
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // ...and every alias, including `100` and `new`, is in the map verbatim.
+    expect(SemanticLight.byAlias['text/primary'], SemanticLight.textPrimary);
+    expect(SemanticLight.byAlias['100'], SemanticLight.color100);
+    expect(SemanticLight.byAlias['new'], SemanticLight.colorNew);
+    expect(SemanticLight.byAlias['경고/배경'], SemanticLight.warningSurface);
+
+    expect(find.text('text/primary'), findsOneWidget);
+    expect(find.text('action/primary-pressed'), findsOneWidget);
+    expect(find.text('경고/배경'), findsOneWidget);
   });
 }

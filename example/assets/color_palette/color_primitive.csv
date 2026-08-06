@@ -1,0 +1,10 @@
+name,value,Comment
+gray-0,#FFFFFF,
+gray-50,#F8F9FA,
+gray-100,#F1F3F5,
+gray-500,#ADB5BD,
+gray-900,#212529,
+blue-500,#2C6BED,Brand blue
+blue-600,#1F55C4,
+red-500,#E03131,
+transparent,#FFFFFF00,Fully transparent (8 digit hex is #RRGGBBAA)
